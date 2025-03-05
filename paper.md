@@ -7,7 +7,7 @@ tags:
     - intrinsic alignments
 authors:
     - given-names: Nicholas
-	  surname: Van Alfen
+      surname: Van Alfen
       orcid: 0000-0003-0049-2861
       corresponding: true
       equal-contrib: true
