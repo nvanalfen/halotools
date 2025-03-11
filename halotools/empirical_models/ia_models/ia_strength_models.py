@@ -264,6 +264,19 @@ class RadialSatelliteAlignmentStrength():
 
         return result
 
+class _CustomAlignmentStrengthTemplate():
+    """
+    template for custom alignment strength models. Not to be used on its own.
+    """
+    def __init__(self, column_names=[], custom_functions={}, custom_args={}, custom_kwargs={}):
+        """
+        Parameters
+        ==========
+        column_names : list
+            list of strings of column names in the galaxy table. The values from each of these columns will
+            be used in their corresponding custom function.
+        """
+        self.gal_type = None
 
 def alignment_strength(p):
     r"""
