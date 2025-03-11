@@ -299,6 +299,16 @@ class _CustomAlignmentStrengthTemplate():
 
         self.param_dict = kwargs
 
+    def calculate_alignment_strength(self, **kwargs):
+        if 'table' in kwargs.keys():
+            table = kwargs['table']
+            values = {col : table[col] for col in self.column_names}
+        else:
+            values = {col : kwargs[col] for col in self.column_names}
+
+        s = self.custom_function(**values, **self.param_dict)
+        return np.clip(s, -1, 1)
+
 class CustomSatelliteAlignmentStrength(_CustomAlignmentStrengthTemplate):
     """
     Custom alignment strength for satellite galaxies. Allows the user to define a custom function that
@@ -347,15 +357,10 @@ class CustomSatelliteAlignmentStrength(_CustomAlignmentStrengthTemplate):
         super().__init__(gal_type="satellites", column_names=column_names, custom_function=custom_function, **kwargs)
 
     def assign_satellite_alignment_strength(self, **kwargs):
+        s = self.calculate_alignment_strength(**kwargs)
+
         if 'table' in kwargs.keys():
             table = kwargs['table']
-            values = {col : table[col] for col in self.column_names}
-        else:
-            values = {col : kwargs[col] for col in self.column_names}
-
-        s = self.custom_function(**values, **self.param_dict)
-
-        if 'table' in kwargs.keys():
             mask = (table['gal_type'] == self.gal_type)
             table['satellite_alignment_strength'] = 0.0
             table['satellite_alignment_strength'][mask] = s[mask]
@@ -407,15 +412,10 @@ class CustomCentralAlignmentStrength(_CustomAlignmentStrengthTemplate):
         super().__init__(gal_type="centrals", column_names=column_names, custom_function=custom_function, **kwargs)
 
     def assign_central_alignment_strength(self, **kwargs):
+        s = self.calculate_alignment_strength(**kwargs)
+
         if 'table' in kwargs.keys():
             table = kwargs['table']
-            values = {col : table[col] for col in self.column_names}
-        else:
-            values = {col : kwargs[col] for col in self.column_names}
-
-        s = self.custom_function(**values, **self.param_dict)
-
-        if 'table' in kwargs.keys():
             mask = (table['gal_type'] == self.gal_type)
             table['central_alignment_strength'] = 0.0
             table['central_alignment_strength'][mask] = s[mask]
