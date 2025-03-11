@@ -4,6 +4,7 @@ halotools model components for modelling central and scatellite intrinsic alignm
 
 from __future__ import absolute_import, division, print_function, unicode_literals
 import numpy as np
+from collections.abc import Callable
 
 # vector rotations
 from ...utils import rotate_vector_collection
@@ -268,15 +269,161 @@ class _CustomAlignmentStrengthTemplate():
     """
     template for custom alignment strength models. Not to be used on its own.
     """
-    def __init__(self, column_names=[], custom_functions={}, custom_args={}, custom_kwargs={}):
+    def __init__(self, gal_type=None, column_names:list[str]=[], custom_function:Callable=None, **kwargs):
+        """
+        Parameters
+        ==========
+        gal_type : str
+            string specifying the galaxy type. Options are 'centrals' or 'satellites'.
+        column_names : list
+            list of strings of column names in the galaxy table. The values from each of these columns will
+            be used in the custom function.
+        custom_function : function
+            function that takes the values from the columns specified in column_names along with the specified
+            kwarg parameters and returns the alignment strength. Allows the user to determine how the alignment
+            strength depends on the values in the galaxy table.
+        kwargs : dict
+            keyword arguments to pass to the custom function. These will be added to the param_dict.
+        """
+        self.gal_type = gal_type
+
+        if self.gal_type == "satellites":
+            self._mock_generation_calling_sequence = (['assign_satellite_alignment_strength'])
+            self._galprop_dtypes_to_allocate = np.dtype([(str('satellite_alignment_strength'), 'f4')])
+        elif self.gal_type == "centrals":
+            self._mock_generation_calling_sequence = (['assign_central_alignment_strength'])
+            self._galprop_dtypes_to_allocate = np.dtype([(str('central_alignment_strength'), 'f4')])
+
+        self.column_names = column_names
+        self.custom_function = custom_function
+
+        self.param_dict = kwargs
+
+class CustomSatelliteAlignmentStrength(_CustomAlignmentStrengthTemplate):
+    """
+    Custom alignment strength for satellite galaxies. Allows the user to define a custom function that
+    determines the alignment strength based on the values in the galaxy table.
+    """
+    def __init__(self, column_names:list[str]=[], custom_function:Callable=None, **kwargs):
         """
         Parameters
         ==========
         column_names : list
             list of strings of column names in the galaxy table. The values from each of these columns will
-            be used in their corresponding custom function.
+            be used in the custom function.
+        custom_function : function
+            function that takes the values from the columns specified in column_names along with the specified
+            kwarg parameters and returns the alignment strength. Allows the user to determine how the alignment
+            strength depends on the values in the galaxy table. The function should return values bounded between
+            [-1,1]. The custom function should assume all arguments are given as keyword arguments. This will
+            avoid errors if the column names are given in a different order than the function assumes.
+        kwargs : dict
+            keyword arguments to pass to the custom function. These will be added to the param_dict.
+
+        Example Usage
+        =============
+        # Here, redshift and mass represent column names present in the galaxy table. They are given default values
+        # to ensure they are seen as keyword arguments. The keyword in this case should match the name of the column.
+        # If the column name is too cumbersome, you may store the value in an easier variable name at the start of
+        # the function. You could also leave them and only include **kwargs.
+        # In this example, **kwargs also includes the parameters a, gamma, and b.
+
+        def custom_alignment_strength_function(redshift=0, mass=1, **kwargs):
+            # This section is redundant in this case, but an example of how you could store cumbersome column names
+            # in easier variable names.
+            redshift = redshift
+            mass = mass
+            a = a
+            b = b
+            gamma = gamma
+
+            return a*mass + b*redshift**gamma
+
+        custom_strength_model = CustomSatelliteAlignmentStrength(column_names=['redshift', 'mass'],
+                                                                 custom_function=custom_alignment_strength_function,
+                                                                 a=0.5, gamma=0.3, b=0.1)
+
         """
-        self.gal_type = None
+        super().__init__(gal_type="satellites", column_names=column_names, custom_function=custom_function, **kwargs)
+
+    def assign_satellite_alignment_strength(self, **kwargs):
+        if 'table' in kwargs.keys():
+            table = kwargs['table']
+            values = {col : table[col] for col in self.column_names}
+        else:
+            values = {col : kwargs[col] for col in self.column_names}
+
+        s = self.custom_function(**values, **self.param_dict)
+
+        if 'table' in kwargs.keys():
+            mask = (table['gal_type'] == self.gal_type)
+            table['satellite_alignment_strength'] = 0.0
+            table['satellite_alignment_strength'][mask] = s[mask]
+            return table
+        else:
+            return s
+        
+class CustomCentralAlignmentStrength(_CustomAlignmentStrengthTemplate):
+    def __init__(self, column_names:list[str]=[], custom_function:Callable=None, **kwargs):
+        """
+        Parameters
+        ==========
+        column_names : list
+            list of strings of column names in the galaxy table. The values from each of these columns will
+            be used in the custom function.
+        custom_function : function
+            function that takes the values from the columns specified in column_names along with the specified
+            kwarg parameters and returns the alignment strength. Allows the user to determine how the alignment
+            strength depends on the values in the galaxy table. The function should return values bounded between
+            [-1,1]. The custom function should assume all arguments are given as keyword arguments. This will
+            avoid errors if the column names are given in a different order than the function assumes.
+        kwargs : dict
+            keyword arguments to pass to the custom function. These will be added to the param_dict.
+
+        Example Usage
+        =============
+        # Here, redshift and mass represent column names present in the galaxy table. They are given default values
+        # to ensure they are seen as keyword arguments. The keyword in this case should match the name of the column.
+        # If the column name is too cumbersome, you may store the value in an easier variable name at the start of
+        # the function. You could also leave them and only include **kwargs.
+        # In this example, **kwargs also includes the parameters a, gamma, and b.
+
+        def custom_alignment_strength_function(redshift=0, mass=1, **kwargs):
+            # This section is redundant in this case, but an example of how you could store cumbersome column names
+            # in easier variable names.
+            redshift = redshift
+            mass = mass
+            a = a
+            b = b
+            gamma = gamma
+
+            return a*mass + b*redshift**gamma
+
+        custom_strength_model = CustomCentralAlignmentStrength(column_names=['redshift', 'mass'],
+                                                                 custom_function=custom_alignment_strength_function,
+                                                                 a=0.5, gamma=0.3, b=0.1)
+
+        """
+        super().__init__(gal_type="centrals", column_names=column_names, custom_function=custom_function, **kwargs)
+
+    def assign_central_alignment_strength(self, **kwargs):
+        if 'table' in kwargs.keys():
+            table = kwargs['table']
+            values = {col : table[col] for col in self.column_names}
+        else:
+            values = {col : kwargs[col] for col in self.column_names}
+
+        s = self.custom_function(**values, **self.param_dict)
+
+        if 'table' in kwargs.keys():
+            mask = (table['gal_type'] == self.gal_type)
+            table['central_alignment_strength'] = 0.0
+            table['central_alignment_strength'][mask] = s[mask]
+            return table
+        else:
+            return s
+
+
 
 def alignment_strength(p):
     r"""
